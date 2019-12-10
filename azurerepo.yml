@@ -1,0 +1,172 @@
+pool:
+  name: Main Pool
+#Your build pipeline references the ‘BuildPlatform’ variable, which you’ve selected to be settable at queue time. Create or edit the build pipeline for this YAML file, define the variable on the Variables tab, and then select the option to make it settable at queue time. See https://go.microsoft.com/fwlink/?linkid=865971
+#Your build pipeline references the ‘BuildConfiguration’ variable, which you’ve selected to be settable at queue time. Create or edit the build pipeline for this YAML file, define the variable on the Variables tab, and then select the option to make it settable at queue time. See https://go.microsoft.com/fwlink/?linkid=865971
+#Your build pipeline references the ‘BuildPlatform’ variable, which you’ve selected to be settable at queue time. Create or edit the build pipeline for this YAML file, define the variable on the Variables tab, and then select the option to make it settable at queue time. See https://go.microsoft.com/fwlink/?linkid=865971
+#Your build pipeline references the ‘BuildConfiguration’ variable, which you’ve selected to be settable at queue time. Create or edit the build pipeline for this YAML file, define the variable on the Variables tab, and then select the option to make it settable at queue time. See https://go.microsoft.com/fwlink/?linkid=865971
+#Your build pipeline references the ‘BuildConfiguration’ variable, which you’ve selected to be settable at queue time. Create or edit the build pipeline for this YAML file, define the variable on the Variables tab, and then select the option to make it settable at queue time. See https://go.microsoft.com/fwlink/?linkid=865971
+
+steps:
+- checkout: self  
+  persistCredentials: true
+- task: DotNetCoreCLI@2
+  displayName: 'dotnet restore'
+  inputs:
+    command: restore
+    projects: |
+     **/Coupa.CW.Application.csproj
+     **/Coupa.CW.Data.csproj
+     **/Coupa.CW.Domain.csproj
+     **/Coupa.CW.Infra.Data.csproj
+     **/Coupa.CW.Infra.IoC.csproj
+     **/Coupa.CW.UnitTest.csproj
+     **/Coupa.CW.BackgroundService.csproj
+     **/Coupa.CW.Domain.Tests.csproj
+     **/Coupa.CW.Domain.Tests.csproj
+     **/CustomAdhocReports.csproj
+     **/Coupa.CW.DatabaseUnittest.csproj
+     **/Coupa.CW.BackgroundService.csproj
+     **/MS.vbproj
+  enabled: false
+
+- task: VSBuild@1
+  displayName: 'Main Branch'
+  inputs:
+    solution: SMARTTrack.sln
+    msbuildArgs: '/p:DeployOnBuild=true /p:WebPublishMethod=Package /p:PackageAsSingleFile=true /p:SkipInvalidConfigurations=true /p:PackageLocation="$(build.artifactstagingdirectory)\\"'
+    platform: '$(BuildPlatform)'
+    configuration: '$(BuildConfiguration)'
+    clean: true
+    maximumCpuCount: true
+  enabled: false
+
+- task: VSBuild@1
+  displayName: DWH
+  inputs:
+    solution: SmartTrackDW.sln
+    platform: '$(BuildPlatform)'
+    configuration: '$(BuildConfiguration)'
+    clean: true
+    maximumCpuCount: true
+  enabled: false
+
+- script: 'devenv SmartTrackDW.sln /Build'
+  workingDirectory: '$(System.DefaultWorkingDirectory)'
+  displayName: Data
+  enabled: false
+
+- task: mmajcica.devenv-build.DevEnvBuild.DevEnvBuild@2
+  displayName: DWH
+  inputs:
+    solution: SmartTrackDWSSIS.sln
+    buildCfg: Development
+    clean: true
+  enabled: false
+
+- task: DotNetCoreCLI@2
+  displayName: 'dotnet core job service publish'
+  inputs:
+    command: publish
+    publishWebProjects: false
+    projects: '**/Coupa.CW.BackgroundService.csproj'
+    arguments: '--configuration $(BuildConfiguration) --runtime win10-x64'
+    workingDirectory: '$(System.DefaultWorkingDirectory)'
+  enabled: false
+
+- task: PowerShell@2
+  displayName: DCR.SmartTrack.Services
+  inputs:
+    targetType: filePath
+    filePath: ./CCW.ShellScripts/ConvertToZip.ps1
+    arguments: '-SourcePath "Windows Services\DCR.SmartTrack.Services\bin\release" -DestinationPath "Windows Services\DCR.SmartTrack.Services\bin\" -fileName "DCR.SmartTrack.Services.zip"'
+  enabled: false
+
+- task: PowerShell@2
+  displayName: DCR.SmartTrack.AllServices
+  inputs:
+    targetType: filePath
+    filePath: ./CCW.ShellScripts/ConvertToZip.ps1
+    arguments: '-SourcePath "Windows Services\DCR.SmartTrack.AllServices\bin\release" -DestinationPath "Windows Services\DCR.SmartTrack.AllServices\bin\" -fileName "DCR.SmartTrack.AllServices.zip"'
+  enabled: false
+
+- task: CopyFiles@2
+  displayName: 'Copy Files to Scripts'
+  inputs:
+    SourceFolder: CCW.Database/CWDatabase
+    TargetFolder: '$(Build.ArtifactStagingDirectory)'
+    OverWrite: true
+  enabled: false
+
+- task: PowerShell@2
+  displayName: Functions
+  inputs:
+    targetType: filePath
+    filePath: ./CCW.ShellScripts/Functions.ps1
+    failOnStderr: true
+  enabled: false
+
+- task: PowerShell@2
+  displayName: Views
+  inputs:
+    targetType: filePath
+    filePath: ./CCW.ShellScripts/Views.ps1
+    failOnStderr: true
+  enabled: false
+
+- task: PowerShell@2
+  displayName: UDT
+  inputs:
+    targetType: filePath
+    filePath: ./CCW.ShellScripts/UDTandDependenciesStoredProcedure.ps1
+    failOnStderr: true
+  enabled: false
+
+- task: PowerShell@2
+  displayName: 'Stored Procedure'
+  inputs:
+    targetType: filePath
+    filePath: ./CCW.ShellScripts/StoredProcedure.ps1
+    failOnStderr: true
+  enabled: false
+
+- task: PowerShell@2
+  displayName: 'Email Functions'
+  inputs:
+    targetType: filePath
+    filePath: ./CCW.ShellScripts/FunctionsEmail.ps1
+    failOnStderr: true
+  enabled: false
+
+- task: PowerShell@2
+  displayName: 'Email Stored Procedure'
+  inputs:
+    targetType: filePath
+    filePath: ./CCW.ShellScripts/StoredProcedureEmail.ps1
+    failOnStderr: true
+  enabled: false
+
+- task: PowerShell@2
+  displayName: 'Reports '
+  inputs:
+    targetType: filePath
+    filePath: './CCW.ShellScripts/SSRS-BuildReport.ps1'
+    failOnStderr: true
+  enabled: false
+
+- task: PublishBuildArtifacts@1
+  displayName: 'Publish Artifact'
+  inputs:
+    PathtoPublish: '$(build.artifactstagingdirectory)'
+  enabled: false
+  condition: succeededOrFailed()
+
+- task: PowerShell@2
+  displayName: 'PowerShell Script'
+  inputs:
+    targetType: filePath
+    filePath: ./CCW.ShellScripts/GenerateMasterScripts.ps1
+ 
+- task: BatchScript@1
+  displayName: 'Run script CCW_UnittestStoredProcedure'
+  inputs:
+    filename: 'batch.bat'
